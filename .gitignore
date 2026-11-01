@@ -1,0 +1,12 @@
+*.pth
+*.pt
+*.bin
+*.onnx
+*.index
+*.wav
+*.raw
+__pycache__/
+*.pyc
+rvc-source/
+reports/
+wheel-check/
