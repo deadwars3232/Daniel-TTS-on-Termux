@@ -1,28 +1,83 @@
-# Existing-device installation and rollback
+# Install on native Termux
 
-Keep the working environment. Do not install upstream RVC requirements or run archived installers. `preservation/environment.json` records installed versions, not a portable pip lockfile. This work did not reinstall dependencies or download assets. Fresh-device installation is not verified and needs Termux-compatible wheels from the original providers.
+Supported inference target: Android ARM64, native Termux, CPU, Python 3.14. The CLI unit tests also run on Linux with Python 3.11–3.14. Windows, GPU inference, and other Piper command implementations are not supported.
 
-Required assets remain at the paths in `instruction.md`: Daniel checkpoint, local Transformers HuBERT config/preprocessor/weights, RMVPE checkpoint, and Piper ONNX/config. Models are excluded from Git and retained on disk. The RVC source is a nested existing Git repository. Inference changes are committed on the nested `daniel/production-p0-p1` branch; the parent repository records its revision in `reports/rvc-revision.txt`. Retain the complete existing RVC checkout. `preservation/rvc-local.patch` captures pre-existing changes against that checkout.
+## 1. Obtain the source
 
-The process-local `rvc-source/termux_compat.py` supplies the minimal Transformers models package and disabled GGUF loader before importing HuBERT. It is deliberately restricted to verified Transformers 4.44.2. The installed minimal `transformers/models/__init__.py` was left intact for other consumers; its original `.bak`, current contents and diff are preserved. The CLI no longer relies on executing that patched initializer. Doctor exercises imports without loading model weights. Always run doctor and an actual synthesis after any environment change.
-
-Rollback code (keeps new files for investigation):
+Clone this repository into a directory of your choice, then change into that directory. The inference source is included under `runtime/`; no submodules or upstream patch application is required.
 
 ```sh
-cd "$HOME/daniel_voice"
-cp preservation/daniel-tts daniel-tts
-cp preservation/rvc-source/convert_daniel.py rvc-source/convert_daniel.py
-cp preservation/rvc-source/termux_compat.py rvc-source/termux_compat.py
+python3 daniel-tts --help
+python3 -m unittest discover -s tests -v
 ```
 
-HuBERT, RMVPE and the shared pipeline were not edited in this implementation; their known-good source copies are also in preservation. Existing site-packages were not modified. The installed command is a symlink and automatically follows launcher restoration. The old command overwrites outputs; choose a fresh output for rollback testing.
+These commands require only Python's standard library.
 
-To recreate the launcher symlink on a device where it is absent:
+## 2. Provide the inference environment
+
+Keep a working installation intact. Do not run stock RVC requirements or upgrade the scientific stack blindly. The original Termux-specific wheels and a clean-device installation recipe have not been reproduced. This is a prerequisite checklist, not a portable pip lockfile.
+
+Observed working versions on the development device:
+
+| Component | Version |
+|---|---|
+| Python | 3.14.8 |
+| PyTorch | 2.15.0 |
+| NumPy | 2.5.4 |
+| SciPy | 1.18.1 |
+| soundfile | 0.14.0 |
+| librosa | 1.0.0 |
+| Transformers | **4.44.2** |
+| huggingface-hub | 0.36.0 |
+| safetensors | 0.8.0 |
+
+Transformers 4.44.2 is enforced by the process-local compatibility shim. It does not edit site-packages. Other values above describe the installed device, not availability on PyPI or a tested version range.
+
+Provide FFmpeg, libsndfile, eSpeak NG data, and the Termux-specific Piper CLI originally supplied by `gyroing/piper-tts-for-termux`. This Piper accepts `-m NAME -f FILE -- TEXT`, uses `PIPER_VOICE_PATH`, and writes **raw float32 little-endian mono at 22050 Hz**. Other Piper executables may use different flags/output formats. Validate the implementation before use.
+
+FAISS, fairseq, numba, parselmouth and tokenizers are not required for the supported path. No dependency installer is bundled because installation on a clean device is not verified.
+
+## 3. Supply trusted model assets
+
+Use your own authorized local copies. No downloads are performed. The original Daniel checkpoint's authoritative source and redistribution permissions have not been established; the source license does not cover these assets. Record origins, licenses and checksums for your deployment.
+
+Default paths relative to the checkout (or `DANIEL_ROOT`):
+
+```text
+DanielUK_200e.pth                 # RVC v2, f0-enabled, 40 kHz
+rvc-source/assets/hubert_base/
+  config.json
+  preprocessor_config.json
+  pytorch_model.bin              # compatible 768-dimensional HuBERT
+rvc-source/assets/rmvpe/rmvpe.pt
+```
+
+The legacy `rvc-source/assets` location is retained for existing devices; only assets are read there. Code always loads from the checkout's `runtime/` directory.
+
+Piper defaults to `$HOME/tts/models/en_GB-alan-medium.onnx` and its `.onnx.json` config. Override locations with `--checkpoint`, `--hubert-dir`, `--rmvpe-dir`, `--voice-dir`, and `--voice`. `ESPEAK_DATA_PATH` defaults to `$PREFIX/share/espeak-ng-data` (or Python's prefix if PREFIX is unset).
+
+RVC uses pickle deserialization. Only load checkpoints you trust. The CLI is a local tool, not an upload service.
+
+## 4. Verify and install the command
 
 ```sh
-ln -s "$HOME/daniel_voice/daniel-tts" "$PREFIX/bin/daniel-tts"
+python3 daniel-tts doctor --json
+python3 daniel-tts 'Hello world' hello.wav --json
+python3 daniel-tts benchmark --output benchmark.wav --json
 ```
 
-Do not overwrite an unrelated installed command. Model sources and licensing/commercial usage permissions remain unverified; this repository contains no model binaries.
+Listen to the output and check the voice and chunk seams. Doctor checks files and imports, not model integrity or audio quality. Allow about 1.6 GiB resident memory based on the recorded short benchmark, with additional headroom for longer input. Android can terminate background jobs.
 
-Source reconstruction record: upstream RVC base `81eed5e8f68b6bed1789f682fe78cdd324495afc`, with `reports/rvc-production.patch` containing this device's production source additions and compatibility edits. Apply only to that clean base; do not apply on top of the existing production branch. This is source reproducibility, not a verified fresh-device package installation.
+Optional command symlink, from the checkout directory:
+
+```sh
+ln -s "$PWD/daniel-tts" "$PREFIX/bin/daniel-tts"
+```
+
+This fails safely if the destination exists. `python3 /path/to/checkout/daniel-tts` also works without a symlink. On systems without Termux executable rewriting, invoke Python explicitly if `/usr/bin/env` is unavailable.
+
+## Updates, rollback and uninstall
+
+Keep model assets separate from source changes. Back up local modifications before updating, inspect the changelog, then run tests, doctor and a synthesis. To roll back, use a separate checkout of your previous revision and point the command symlink at it; model path flags can reference existing assets.
+
+To uninstall, remove only the symlink you created. The repository installs no packages or system services. Keep models and generated audio unless you intend to remove them separately.

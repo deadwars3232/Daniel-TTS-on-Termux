@@ -1,5 +1,12 @@
-#!/data/data/com.termux/files/usr/bin/sh
-set -eu
-export OPENBLAS_NUM_THREADS="${OPENBLAS_NUM_THREADS:-1}"
-export OMP_NUM_THREADS="${OMP_NUM_THREADS:-1}"
-exec python -u "${DANIEL_ROOT:-$HOME/daniel_voice}/daniel_cli.py" "$@"
+#!/usr/bin/env python3
+"""Launch from a checkout or a symlink without depending on its directory name."""
+from pathlib import Path
+import os
+import sys
+
+os.environ.setdefault('OPENBLAS_NUM_THREADS', '1')
+os.environ.setdefault('OMP_NUM_THREADS', '1')
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from daniel_cli import main
+
+raise SystemExit(main())

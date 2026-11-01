@@ -14,8 +14,9 @@ import tempfile
 import time
 import wave
 
-VERSION = '0.1.0'
-ROOT = Path(os.environ.get('DANIEL_ROOT', Path.home() / 'daniel_voice')).expanduser().resolve()
+VERSION = '0.2.0'
+CODE_ROOT = Path(__file__).resolve().parent
+ROOT = Path(os.environ.get('DANIEL_ROOT', CODE_ROOT)).expanduser().resolve()
 
 
 def parser():
@@ -134,13 +135,13 @@ def atomic_output(path, overwrite):
     except FileExistsError:
         raise ValueError(f'Output busy (or stale lock after forced termination): {lock}')
     try:
-        if path.exists() and not overwrite:
+        if os.path.lexists(path) and not overwrite:
             raise ValueError(f'Output exists: {path}; use --overwrite')
         with tempfile.TemporaryDirectory(prefix='.daniel-', dir=path.parent) as tmp:
             staging = Path(tmp)/'output.wav'
             yield staging
             validate_wav(staging, output=True)
-            if path.exists() and not overwrite:
+            if os.path.lexists(path) and not overwrite:
                 raise ValueError(f'Output appeared during conversion: {path}')
             os.replace(staging, path)
     finally:
@@ -164,7 +165,7 @@ def main(argv=None):
         os.environ.setdefault('OMP_NUM_THREADS', '1')
         os.environ['HF_HUB_OFFLINE'] = '1'
         os.environ['TRANSFORMERS_OFFLINE'] = '1'
-        sys.path.insert(0, str(ROOT/'rvc-source'))
+        sys.path.insert(0, str(CODE_ROOT/'runtime'))
         if command == 'doctor':
             preflight(a)
             with contextlib.redirect_stdout(sys.stderr):
@@ -176,7 +177,7 @@ def main(argv=None):
                 raise ValueError('Choose positional output or --output')
             sources = [a.text, a.explicit_text, a.text_file, a.batch, a.input_wav]
             if command == 'benchmark' and not any(x is not None for x in sources):
-                a.input_wav = ROOT/'base.wav'
+                a.explicit_text = 'Hello world. This is a Daniel voice benchmark.'
             elif sum(x is not None for x in sources) != 1:
                 raise ValueError('Provide exactly one text, --text, --text-file, --batch or --input-wav')
             if a.input_wav:
@@ -196,6 +197,8 @@ def main(argv=None):
                 jobs = [c for line in text.splitlines() if line.strip() for c in chunks(line)] if a.batch else chunks(text)
                 if not jobs:
                     raise ValueError('Empty batch')
+            if command == 'benchmark' and not a.input_wav:
+                jobs *= 2
             preflight(a, not a.input_wav)
             output = (a.output or Path(a.destination or ('benchmark.wav' if command == 'benchmark' else 'daniel_output.wav'))).expanduser().absolute()
             if output.suffix.lower() != ".wav":
@@ -224,7 +227,9 @@ def main(argv=None):
                                 base = staging.parent/'base.wav'
                                 run_command(['piper', '-m', a.voice, '-f', str(raw), '--', text], a.verbose)
                                 require_file(raw)
-                                if raw.stat().st_size % 4 or raw.read_bytes()[:4] == b'RIFF':
+                                with raw.open('rb') as stream:
+                                    header = stream.read(4)
+                                if raw.stat().st_size % 4 or header == b'RIFF':
                                     raise ValueError('Piper did not produce expected raw float32 audio')
                                 run_command(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-y', '-f', 'f32le', '-ar', '22050', '-ac', '1', '-i', str(raw), '-af', 'volume=0.15,alimiter=limit=0.5', '-c:a', 'pcm_s16le', str(base)], a.verbose)
                             piece = staging.parent/'piece.wav'
@@ -237,7 +242,6 @@ def main(argv=None):
                             records.append(record)
             result = {'success': True, 'output': str(output), 'jobs': records, 'load_seconds': load_seconds, 'total_seconds': time.perf_counter()-started, 'threads': a.threads, 'device': 'cpu', 'peak_rss_mb': resource.getrusage(resource.RUSAGE_SELF).ru_maxrss/1024}
             if command == 'benchmark':
-                result['historical_baseline_seconds'] = 32.93
                 result['cold_seconds'] = load_seconds+records[0]['job_seconds']
         if a.json or command in ('doctor', 'benchmark'):
             print(json.dumps(result))

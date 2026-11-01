@@ -1,6 +1,8 @@
 import contextlib
 import io
 import json
+import os
+import shutil
 from pathlib import Path
 import subprocess
 import sys
@@ -105,5 +107,54 @@ class CLI(unittest.TestCase):
             self.assertEqual(len(instances), 1)
             self.assertEqual(len(json.loads(out.getvalue())['jobs']), 2)
             self.assertEqual(cli.validate_wav(p/'out.wav', True), .02)
+
+    def test_existing_lock_is_preserved(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d)/'out.wav'
+            lock = p.with_name('.out.wav.lock')
+            lock.mkdir()
+            with self.assertRaisesRegex(ValueError, 'busy'):
+                with cli.atomic_output(p, True):
+                    self.fail('lock must prevent writing')
+            self.assertTrue(lock.is_dir())
+
+    def test_dangling_symlink_requires_overwrite(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d)/'out.wav'
+            p.symlink_to(Path(d)/'missing.wav')
+            with self.assertRaisesRegex(ValueError, 'exists'):
+                with cli.atomic_output(p, False):
+                    self.fail('existing symlink must be protected')
+            self.assertTrue(p.is_symlink())
+
+    def test_default_benchmark_has_two_jobs_without_fixture(self):
+        class Engine:
+            def __init__(self, *args): pass
+            def convert(self, source, target):
+                wav(target)
+                return {'input_seconds': .01}
+        def command(args, verbose):
+            if args[0] == 'piper':
+                Path(args[args.index('-f')+1]).write_bytes(b'\0'*16)
+        with tempfile.TemporaryDirectory() as d:
+            with patch.object(cli, 'ROOT', Path(d)), patch.object(cli, 'preflight'), patch.object(cli, 'run_command', command), patch.dict(sys.modules, {'convert_daniel': type('Module', (), {'DanielEngine': Engine})}):
+                with contextlib.redirect_stdout(io.StringIO()) as out:
+                    status = cli.main(['benchmark', '--output', str(Path(d)/'out.wav'), '--json'])
+            self.assertEqual(status, 0, out.getvalue())
+            jobs = json.loads(out.getvalue())['jobs']
+            self.assertEqual([j['warm'] for j in jobs], [False, True])
+
+    def test_launcher_from_renamed_checkout_and_symlink(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)/'checkout with spaces'
+            root.mkdir()
+            for name in ('daniel-tts', 'daniel_cli.py'):
+                shutil.copyfile(cli.CODE_ROOT/name, root/name)
+            link = Path(d)/'command'
+            link.symlink_to(root/'daniel-tts')
+            env = dict(os.environ, DANIEL_ROOT=str(Path(d)/'assets only'))
+            result = subprocess.run([sys.executable, str(link), '--version'], cwd=d, env=env, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout.strip(), cli.VERSION)
 
 if __name__ == '__main__': unittest.main()

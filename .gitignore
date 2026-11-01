@@ -1,3 +1,4 @@
+# Local models, audio, and generated artifacts
 *.pth
 *.pt
 *.bin
@@ -5,8 +6,14 @@
 *.index
 *.wav
 *.raw
+*.safetensors
 __pycache__/
-*.pyc
-rvc-source/
+*.py[cod]
+.venv/
+.env
+.env.*
+!.env.example
+.local-backup/
 reports/
+rvc-source/
 wheel-check/
