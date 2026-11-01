@@ -1,0 +1,34 @@
+{
+  "base.wav": {
+    "sample_rate": 22050,
+    "channels": 1,
+    "sample_width": 2,
+    "seconds": 2.2987755102040817,
+    "peak": 0.237274169921875,
+    "nonzero": true
+  },
+  "daniel_output.wav": {
+    "sample_rate": 40000,
+    "channels": 1,
+    "sample_width": 2,
+    "seconds": 2.28,
+    "peak": 0.5,
+    "nonzero": true
+  },
+  "reports/baseline.wav": {
+    "sample_rate": 40000,
+    "channels": 1,
+    "sample_width": 2,
+    "seconds": 2.28,
+    "peak": 0.5,
+    "nonzero": true
+  },
+  "reports/offline-batch.wav": {
+    "sample_rate": 40000,
+    "channels": 1,
+    "sample_width": 2,
+    "seconds": 2.6,
+    "peak": 0.5,
+    "nonzero": true
+  }
+}

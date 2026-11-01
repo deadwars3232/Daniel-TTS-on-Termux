@@ -1,0 +1,1 @@
+{"success": true, "python": "3.14.8", "packages": {"torch": "2.15.0", "numpy": "2.5.4", "scipy": "1.18.1", "soundfile": "0.14.0", "transformers": "4.44.2"}, "offline": true, "models_loaded": false}
