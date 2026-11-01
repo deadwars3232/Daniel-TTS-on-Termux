@@ -59,3 +59,5 @@ Human listening, voice similarity, names/numbers, sentence seam quality, sustain
 Storage/text-file check passed through the installed command: 2.44 s PCM16 mono 40 kHz output in Downloads, 65.52 s total. `--quiet --json` produced parseable JSON and empty stderr. See storage-text-file.json.
 
 Legacy positional synthesis passed through installed `daniel-tts "Hello world" reports/positional.wav --json`: 1.06 s valid output, 54.78 s total. An actual CLI `--timeout 1` run returned 130 and left no final WAV or output lock. Human listening is still outstanding.
+
+Tarsie documentation saved and committed locally (initial notes commit 074cfcb). Push to origin master failed because GitHub HTTPS credentials are unavailable. Vault checker reports one pre-existing frontmatter error in 2026-10-31.md; unrelated Obsidian settings were left alone. Diff whitespace checks pass for implementation files; preserved patch artifacts intentionally retain original CRLF/context whitespace.
